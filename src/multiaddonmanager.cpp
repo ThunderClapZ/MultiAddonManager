@@ -194,11 +194,20 @@ IGameEventManager2 *g_pGameEventManagerVTable = nullptr;
 CServerSideClientBase *g_pServerSideClientVTable = nullptr;
 CServerSideClientBase *g_pHLTVClientVTable = nullptr;
 
+static std::uint32_t GetGameFrameVtableIndex()
+{
+	// CS2 1.42.0.1 (build 2000950) inserted a new virtual into ISource2Server before WriteSignonMessages,
+	// shifting GameFrame from vtable index 19 to 20 (alliedmodders/s2sdk#128).
+	// If compiled against an older s2sdk header where GameFrame is still at 19, shift it to 20.
+	const std::int32_t index = KHook::GetVtableIndex(&IServerGameDLL::GameFrame);
+	return static_cast<std::uint32_t>(index == 19 ? 20 : index);
+}
+
 MultiAddonManager g_MultiAddonManager;
 PLUGIN_EXPOSE(MultiAddonManager, g_MultiAddonManager);
 
 MultiAddonManager::MultiAddonManager() :
-	m_hookGameFrame(&IServerGameDLL::GameFrame, this, nullptr, &MultiAddonManager::Hook_GameFrame_Post),
+	m_hookGameFrame(GetGameFrameVtableIndex(), this, nullptr, &MultiAddonManager::Hook_GameFrame_Post),
 	m_hookStartupServer(&INetworkServerService::StartupServer, this, nullptr, &MultiAddonManager::Hook_StartupServer_Post),
 	m_hookClientConnect(&IServerGameClients::ClientConnect, this, &MultiAddonManager::Hook_ClientConnect, nullptr),
 	m_hookCanHLTVClientConnect(&IServerGameClients::CanHLTVClientConnect, this, &MultiAddonManager::Hook_CanHLTVClientConnect, nullptr),
